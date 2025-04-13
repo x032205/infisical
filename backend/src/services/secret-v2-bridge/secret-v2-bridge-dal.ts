@@ -647,7 +647,29 @@ export const secretV2BridgeDALFactory = ({ db, keyStore }: TSecretV2DalArg) => {
         .where((bd) => {
           const slugs = filters?.tagSlugs?.filter(Boolean);
           if (slugs && slugs.length > 0) {
-            void bd.whereIn(`${TableName.SecretTag}.slug`, slugs);
+            void bd.where((builder) => {
+              // Either has the tag...
+              void builder
+                .whereIn(`${TableName.SecretTag}.slug`, slugs)
+                // ...OR shares key & env with secrets that have the tag
+                .orWhereIn([`${TableName.SecretV2}.key`, `${TableName.SecretV2}.folderId`], (subQuery) => {
+                  void subQuery
+                    .select([`${TableName.SecretV2}.key`, `${TableName.SecretV2}.folderId`])
+                    .distinct()
+                    .from(TableName.SecretV2)
+                    .join(
+                      TableName.SecretV2JnTag,
+                      `${TableName.SecretV2}.id`,
+                      `${TableName.SecretV2JnTag}.${TableName.SecretV2}Id`
+                    )
+                    .join(
+                      TableName.SecretTag,
+                      `${TableName.SecretV2JnTag}.${TableName.SecretTag}Id`,
+                      `${TableName.SecretTag}.id`
+                    )
+                    .whereIn(`${TableName.SecretTag}.slug`, slugs);
+                });
+            });
           }
         })
         .orderBy(
